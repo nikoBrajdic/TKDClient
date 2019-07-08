@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allScores">Ocjene svih sudaca</string>
+    <string name="btn_send">šalji</string>
+    <string name="disconnected">Odspojen</string>
+    <string name="lock">Prihvati</string>
+    <string name="score4">L</string>
+    <string name="score6">D</string>
+    <string name="statusBar">Info o vezi ide ovdje</string>
+    <string name="undo">Ispravi</string>
+    <string name="received">Sudac #</string>
+</resources>

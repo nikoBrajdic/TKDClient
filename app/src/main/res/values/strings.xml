@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name" translatable="false">TKDClient</string>
+    <string name="btn_send">SEND</string>
+    <string name="undo">Undo</string>
+    <string name="lock">Confirm</string>
+    <string name="decSmall" translatable="false">-0.1</string>
+    <string name="decBig" translatable="false">-0.3</string>
+    <string name="statusBar">Connection info goes here</string>
+    <string name="score4">L</string>
+    <string name="score6">R</string>
+    <string name="allScores">all judges\' scores</string>
+    <string name="disconnected">disconnected</string>
+    <string name="received">Referee #</string>
+</resources>
