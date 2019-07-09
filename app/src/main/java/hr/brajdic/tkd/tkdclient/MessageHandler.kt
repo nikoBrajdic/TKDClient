@@ -113,7 +113,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                                     it.mapIndexed { i, str ->
                                         val remove = str.endsWith('R')
                                         val res = if (remove) str.trim('R') else str
-                                        when (true) {
+                                        when {
                                             i + 1 == id && remove -> String.format(bfgFormat, res)
                                             i + 1 == id -> String.format(bgFormat, res)
                                             remove -> String.format(fgFormat, res)
