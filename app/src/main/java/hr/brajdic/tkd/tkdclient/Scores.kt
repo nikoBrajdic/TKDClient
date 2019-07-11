@@ -12,8 +12,8 @@ enum class Mode {
 }
 
 data class Scores(
-        @Json(ignored = true) private val left: Int,
-        @Json(ignored = true) private val right: Int) {
+    @Json(name = "Accuracy") val left: Int,
+    @Json(name = "Presentation") val right: Int) {
 
     @Json(ignored = true) private val initL = left
     @Json(ignored = true) private val initR = right
@@ -21,8 +21,8 @@ data class Scores(
     @Json(ignored = true) private var valR = Value(right)
     @Json(ignored = true) private val stackL = Stack<Int>()
     @Json(ignored = true) private val stackR = Stack<Int>()
-    @Json(name = "Accuracy") val lScore get() = valL.int
-    @Json(name = "Presentation") val rScore get() = valR.int
+    @Json(ignored = true) val lScore get() = valL.int
+    @Json(ignored = true) val rScore get() = valR.int
 
     private fun inc(side: Mode): Value = run {
         if (side === Mode.LEFT) valL else valR
@@ -37,7 +37,7 @@ data class Scores(
     }
 
     private fun popStack(side: Mode): Int = run {
-        if (side === Mode.LEFT) stackL to left else stackR to right
+        if (side === Mode.LEFT) stackL to initL else stackR to initR
     }.let { (s, v) ->
         if (s.empty()) v else s.pop()
     }

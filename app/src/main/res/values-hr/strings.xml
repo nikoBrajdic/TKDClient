@@ -6,7 +6,7 @@
     <string name="lock">Prihvati</string>
     <string name="score4">L</string>
     <string name="score6">D</string>
-    <string name="statusBar">Info o vezi ide ovdje</string>
+    <string name="statusBar">Info o vezi nalazi se ovdje</string>
     <string name="undo">Ispravi</string>
     <string name="received">Sudac #</string>
 </resources>

@@ -26,8 +26,8 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
 
     private val parser = Klaxon()
     private var id = 0
-    private val warningToast: Toast = makeToast(RED, WHITE)!!
-    private val infoToast: Toast = makeToast(LTGRAY, BLACK)!!
+    private val warningToast: Toast = makeToast(RED, WHITE)
+    private val infoToast: Toast = makeToast(LTGRAY, BLACK)
     private var scores: Scores = Scores(40, 60)
     private val client = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
@@ -53,9 +53,8 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
         }
 
     override fun handleMessage(msg: Message) {
-        val packet = msg.obj as String
-        val inbound = parser.parse<InboundPacket>(packet)!!
         try {
+            val inbound = parser.parse<InboundPacket>(msg.obj as String) ?: return
             when (inbound.type) {
                 "open" -> {
                     ws.send(OutboundPacket.instructions("connect_request", mac = macAddress, id = id))
@@ -93,7 +92,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                     }
                 }
                 "scores" -> {
-                    ws.send(OutboundPacket.instructions("score", battery = battery, scores = scores))
+                    ws.send(OutboundPacket.instructions("score", battery = battery, scores = Scores(scores.lScore, scores.rScore)))
                 }
                 "all_scores" -> {
                     if (!inbound.message.isNullOrEmpty()) {
@@ -156,7 +155,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                     context.finish()
                 }
                 "failure" -> {
-                    reconnect(NORMAL_CLOSURE_STATUS, inbound.message ?: "", 5)
+                    reconnect(NORMAL_CLOSURE_STATUS, inbound.message ?: "")
                     context.statusBar.text = context.getString(R.string.disconnected)
                     warningToast.apply { setText(inbound.message) }.show()
                     vibrate()
@@ -189,19 +188,17 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
         }
     }
 
-    private fun makeToast(bgColor: Int,
-                          fgColor: Int,
-                          tSize: Float = 30f,
-                          duration: Int = Toast.LENGTH_LONG) = Toast.makeText(context, null, duration).apply {
-        with(view as ViewGroup) {
-            setBackgroundColor(bgColor)
-            with(getChildAt(0) as TextView) {
-                textSize = tSize
+    private fun makeToast(bgColor: Int, fgColor: Int, tSize: Float = 30f, duration: Int = Toast.LENGTH_LONG) =
+        Toast.makeText(context, null, duration).apply {
+            with(view as ViewGroup) {
                 setBackgroundColor(bgColor)
-                setTextColor(fgColor)
+                with(getChildAt(0) as TextView) {
+                    textSize = tSize
+                    setBackgroundColor(bgColor)
+                    setTextColor(fgColor)
+                }
             }
         }
-    }
 
     private fun reconnect(code: Int, reason: String, wait: Int = 0) {
         if (wait > 0) Thread.sleep(wait * 1000L)
