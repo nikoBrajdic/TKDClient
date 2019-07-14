@@ -7,8 +7,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
 
-const val NORMAL_CLOSURE_STATUS = 1000
-
 object TKDClient : WebSocketListener() {
 
     private val messenger = Messenger(MessageHandler)

@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color.*
 import android.os.*
+import android.os.BatteryManager.EXTRA_SCALE
+import android.os.BatteryManager.EXTRA_LEVEL
 import android.text.Html
 import android.view.View.INVISIBLE
 import android.view.View.VISIBLE
@@ -21,12 +23,9 @@ import java.util.concurrent.TimeUnit
 
 object MessageHandler : Handler(Looper.getMainLooper()) {
 
-    private val context: MainActivity
-    get() = MainActivity.instance
-
     private val parser = Klaxon()
     private var id = 0
-    private val warningToast: Toast = makeToast(RED, WHITE)
+    private val warningToast: Toast = makeToast(RED, WHITE, Toast.LENGTH_SHORT)
     private val infoToast: Toast = makeToast(LTGRAY, BLACK)
     private var scores: Scores = Scores(40, 60)
     private val client = OkHttpClient.Builder()
@@ -36,6 +35,9 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
             .build()
 
     private var ws = connect()
+
+    private val context: MainActivity
+        get() = MainActivity.instance
 
     private val macAddress
         get() = NetworkInterface.getNetworkInterfaces()
@@ -47,10 +49,12 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
 
     private val battery
         get() = with(context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))!!) {
-            (100f * getIntExtra(BatteryManager.EXTRA_LEVEL, -1) /
-                    getIntExtra(BatteryManager.EXTRA_SCALE, -1))
+            (100f * getIntExtra(EXTRA_LEVEL, -1) /
+                    getIntExtra(EXTRA_SCALE, -1))
                     .toInt()
         }
+
+    private const val NORMAL_CLOSURE_STATUS = 1000
 
     override fun handleMessage(msg: Message) {
         try {
@@ -62,7 +66,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                 "hello" -> {
                     id = inbound.id ?: id
                     ws.send(OutboundPacket.instructions("hello", id = id))
-                    val idText = String.format("%s%s", context.getString(R.string.received), inbound.id)
+                    val idText = String.format("%s%s", context.getString(R.string.received), id)
                     context.statusBar.text = idText
                     infoToast.apply { setText(idText) }.show()
                     vibrate(200)
@@ -92,7 +96,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                     }
                 }
                 "scores" -> {
-                    ws.send(OutboundPacket.instructions("score", battery = battery, scores = Scores(scores.lScore, scores.rScore)))
+                    sendScores()
                 }
                 "all_scores" -> {
                     if (!inbound.message.isNullOrEmpty()) {
@@ -166,7 +170,8 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                 }
             }
         } catch (ex: Exception) {
-            warningToast.apply { this.setText(ex.message) }.show()
+            warningToast.apply { setText(ex.message) }.show()
+            ex.printStackTrace()
         }
     }
 
@@ -188,7 +193,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
         }
     }
 
-    private fun makeToast(bgColor: Int, fgColor: Int, tSize: Float = 30f, duration: Int = Toast.LENGTH_LONG) =
+    private fun makeToast(bgColor: Int, fgColor: Int, duration: Int = Toast.LENGTH_LONG, tSize: Float = 30f) =
         Toast.makeText(context, null, duration).apply {
             with(view as ViewGroup) {
                 setBackgroundColor(bgColor)
@@ -206,7 +211,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
         ws = connect()
     }
 
-    private fun connect(): WebSocket = Request.Builder().url("ws://192.168.5.12:8088/TKD").build().let {
+    private fun connect(): WebSocket = Request.Builder().url("ws://192.168.0.11:8088/TKD").build().let {
         client.newWebSocket(it, TKDClient)
     }
 
@@ -219,7 +224,7 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
     }
 
     private fun sendScores() = scores.let {
-        OutboundPacket.instructions("score", battery = battery, scores = it)
+        OutboundPacket.instructions("score", battery = battery, scores = Scores(it.lScore, it.rScore))
     }.also {
         ws.send(it)
     }

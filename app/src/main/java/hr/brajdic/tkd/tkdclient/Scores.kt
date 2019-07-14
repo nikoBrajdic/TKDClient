@@ -15,14 +15,14 @@ data class Scores(
     @Json(name = "Accuracy") val left: Int,
     @Json(name = "Presentation") val right: Int) {
 
-    @Json(ignored = true) private val initL = left
-    @Json(ignored = true) private val initR = right
-    @Json(ignored = true) private var valL = Value(left)
-    @Json(ignored = true) private var valR = Value(right)
-    @Json(ignored = true) private val stackL = Stack<Int>()
-    @Json(ignored = true) private val stackR = Stack<Int>()
-    @Json(ignored = true) val lScore get() = valL.int
-    @Json(ignored = true) val rScore get() = valR.int
+    private val initL = left
+    private val initR = right
+    private var valL = Value(left)
+    private var valR = Value(right)
+    private val stackL = Stack<Int>()
+    private val stackR = Stack<Int>()
+    val lScore get() = valL.int
+    val rScore get() = valR.int
 
     private fun inc(side: Mode): Value = run {
         if (side === Mode.LEFT) valL else valR
@@ -31,8 +31,8 @@ data class Scores(
     }
 
     private fun dec(dec: Int, side: Mode): Value = run {
-        if (side === Mode.LEFT) valL to stackL else valR to stackR
-    }.let { (v, s) ->
+        if (side === Mode.LEFT) stackL to valL else stackR to valR
+    }.let { (s, v) ->
         if (v neq 0) v set (s.push(v.int) - dec) else v
     }
 
