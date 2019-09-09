@@ -1,6 +1,10 @@
 package hr.brajdic.tkd.tkdclient
 
-import com.beust.klaxon.Json
+//import com.beust.klaxon.Json
+import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonProperty
+//import com.google.gson.annotations.Expose
+//import com.google.gson.annotations.SerializedName
 import java.text.DecimalFormat
 import java.util.*
 
@@ -12,32 +16,61 @@ enum class Mode {
 }
 
 data class Scores(
-    @Json(name = "Accuracy") val left: Int,
-    @Json(name = "Presentation") val right: Int) {
+    /*@Json(name = "Accuracy")*/
+    //@Expose @SerializedName("Accuracy")
+    @JsonProperty("Accuracy") var left: Int,
+    //@Json(name = "Presentation")
+    //@Expose @SerializedName("Presentation") var right: Int)
+	@JsonProperty("Presentation") var right: Int) {
 
-    private val initL = left
-    private val initR = right
-    private var valL = Value(left)
-    private var valR = Value(right)
-    private val stackL = Stack<Int>()
-    private val stackR = Stack<Int>()
-    val lScore get() = valL.int
-    val rScore get() = valR.int
+    //@Json(ignored = true)
+    @get:JsonIgnore
+    var initL = left
+    //@Json(ignored = true)
+    @get:JsonIgnore
+    var initR = right
+    //@Json(ignored = true)
+    @get:JsonIgnore
+    var stackL = Stack<Int>()
+    //@Json(ignored = true)
+    @get:JsonIgnore
+    var stackR = Stack<Int>()
 
-    private fun inc(side: Mode): Value = run {
-        if (side === Mode.LEFT) valL else valR
-    }.apply {
-        this set popStack(side)
+    private fun inc(side: Mode): Int {
+        val value: Int
+        if (side === Mode.LEFT) {
+            left = popStack(side)
+            value = left
+        }
+        else {
+            right = popStack(side)
+            value = right
+        }
+        return value
     }
 
-    private fun dec(dec: Int, side: Mode): Value = run {
-        if (side === Mode.LEFT) stackL to valL else stackR to valR
-    }.let { (s, v) ->
-        if (v neq 0) v set (s.push(v.int) - dec) else v
+    private fun dec(dec: Int, side: Mode): Int {
+        val stack = if (side === Mode.LEFT) stackL else stackR
+        val value: Int
+        if (side === Mode.LEFT) {
+            if (left != 0) {
+                stack.push(left)
+                left -= if (dec <= left) dec else left
+            }
+            value = left
+        }
+        else {
+            if (right != 0) {
+                stack.push(right)
+                right -= if (dec <= right) dec else right
+            }
+            value = right
+        }
+        return value
     }
 
     private fun popStack(side: Mode): Int = run {
-        if (side === Mode.LEFT) stackL to initL else stackR to initR
+        if (side === Mode.LEFT) stackL to left else stackR to right
     }.let { (s, v) ->
         if (s.empty()) v else s.pop()
     }
@@ -49,7 +82,7 @@ data class Scores(
     }
 
     fun init() {
-        valL = Value(initL)
-        valR = Value(initR)
+        left = initL
+        right = initR
     }
 }

@@ -8,33 +8,43 @@ import android.os.*
 import android.os.BatteryManager.EXTRA_SCALE
 import android.os.BatteryManager.EXTRA_LEVEL
 import android.text.Html
+import android.util.Log
 import android.view.View.INVISIBLE
 import android.view.View.VISIBLE
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
-import com.beust.klaxon.Klaxon
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.readValue
+//import com.beust.klaxon.Klaxon
+//import com.google.gson.GsonBuilder
 import kotlinx.android.synthetic.main.activity_main.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
 import java.net.NetworkInterface
+import java.util.*
 import java.util.concurrent.TimeUnit
 
-object MessageHandler : Handler(Looper.getMainLooper()) {
+object MessageHandler : Handler() {
 
-    private val parser = Klaxon()
-    private var id = 0
-    private val warningToast: Toast = makeToast(RED, WHITE, Toast.LENGTH_SHORT)
-    private val infoToast: Toast = makeToast(LTGRAY, BLACK)
-    private var scores: Scores = Scores(40, 60)
+    //private val parser = Klaxon().also { Log.i("MessageHandler", "initialising klaxon") }
+    //private val parser = GsonBuilder().excludeFieldsWithoutExposeAnnotation().create()
+    private val parser = ObjectMapper().registerModule(KotlinModule())
+    private var id = 0.also { Log.i("MessageHandler", "initialising id") }
+    private val warningToast: Toast = makeToast(RED, WHITE, Toast.LENGTH_SHORT).also { Log.i("MessageHandler", "initialising warningtoast") }
+    private val infoToast: Toast = makeToast(LTGRAY, BLACK).also { Log.i("MessageHandler", "initialising infoToast") }
+    private var scores: Scores = Scores(40, 60).also { Log.i("MessageHandler", "initialising scores") }
     private val client = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
             .writeTimeout(10, TimeUnit.MINUTES)
-            .build()
+            .build().also { Log.i("MessageHandler", "initialising httpclient") }
 
-    private var ws = connect()
+    private var ws = connect().also { Log.i("MessageHandler", "initialising ws client") }
+
+    private val mainThread = Handler(Looper.getMainLooper())
 
     private val context: MainActivity
         get() = MainActivity.instance
@@ -42,10 +52,10 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
     private val macAddress
         get() = NetworkInterface.getNetworkInterfaces()
             ?.toList()
-            ?.first { it.name.toLowerCase() == "wlan0" }
+            ?.first { it.name.toLowerCase(Locale.ROOT) == "wlan0" }
             ?.hardwareAddress
             ?.joinToString(":") { Integer.toHexString(it.toInt() and 0xFF) }
-            .also { print(it ?: "MAC address not found!") }
+            .also { Log.i(TAG, it ?: "MAC address not found!") }
 
     private val battery
         get() = with(context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))!!) {
@@ -54,21 +64,31 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                     .toInt()
         }
 
+    private const val TAG = "MessageHandler"
     private const val NORMAL_CLOSURE_STATUS = 1000
 
     override fun handleMessage(msg: Message) {
+        Log.i(TAG, "entering handleMessage")
         try {
-            val inbound = parser.parse<InboundPacket>(msg.obj as String) ?: return
+            Log.i(TAG, "parsing inbound packet")
+            //val inbound = parser.parse<InboundPacket>(msg.obj as String) ?: return
+            val inbound = parser.readValue<InboundPacket>(msg.obj as String)
+            Log.i(TAG, "inbound packet parsed: ${msg.obj}")
             when (inbound.type) {
                 "open" -> {
-                    ws.send(OutboundPacket.instructions("connect_request", mac = macAddress, id = id))
+                    Handler().post {
+                        ws.send(OutboundPacket.instructions("connect_request", mac = macAddress, id = id))
+                    }
+                    Log.i(TAG, "Sent connect_request to server")
                 }
                 "hello" -> {
                     id = inbound.id ?: id
                     ws.send(OutboundPacket.instructions("hello", id = id))
                     val idText = String.format("%s%s", context.getString(R.string.received), id)
-                    context.statusBar.text = idText
-                    infoToast.apply { setText(idText) }.show()
+                    mainThread.post {
+                        context.statusBar.text = idText
+                        infoToast.apply { setText(idText) }.show()
+                    }
                     vibrate(200)
                 }
                 "battery" -> if (inbound.battery != null && inbound.battery) {
@@ -76,10 +96,10 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                 }
                 "init" -> {
                     if (inbound.setScores != null) scores = inbound.setScores else scores.init()
-                    with(scores) {
-                        with (context) {
-                            scoreL.text = (lScore / 10f).toString()
-                            scoreR.text = (rScore / 10f).toString()
+                    with (context) {
+                        mainThread.post {
+                            scoreL.text = (scores.left / 10f).toString()
+                            scoreR.text = (scores.right / 10f).toString()
                             scoreL.visibility = VISIBLE
                             scoreR.visibility = VISIBLE
                         }
@@ -94,9 +114,6 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                         "UL"  -> setScores( 0, Mode.LEFT , Mode.INCREMENT)
                         "UR"  -> setScores( 0, Mode.RIGHT, Mode.INCREMENT)
                     }
-                }
-                "scores" -> {
-                    sendScores()
                 }
                 "all_scores" -> {
                     if (!inbound.message.isNullOrEmpty()) {
@@ -125,29 +142,40 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                                     }.joinToString(" ")
                                 }
 
-                        @Suppress("DEPRECATION")
-                        context.allScores.text = Html.fromHtml(span)
+                        mainThread.post {
+                            @Suppress("DEPRECATION")
+                            context.allScores.text = Html.fromHtml(span)
+                        }
                     }
                 }
                 "idle" -> {
                     if (inbound.idle != null) {
-                        flipButtonsEnabled(!inbound.idle)
-                        listOf(context.scoreL, context.scoreR).forEach {
-                            it.visibility = if (inbound.idle) INVISIBLE else VISIBLE
+                        mainThread.post {
+                            flipButtonsEnabled(!inbound.idle)
+                            listOf(context.scoreL, context.scoreR).forEach {
+                                it.visibility = if (inbound.idle) INVISIBLE else VISIBLE
+                            }
+                            context.allScores.text = ""
                         }
-                        context.allScores.text = ""
                     }
                     if (!inbound.message.isNullOrEmpty()) {
-                        infoToast.apply { setText(inbound.message) }.show()
-                        vibrate(200)
+                        mainThread.post {
+                            infoToast.apply { setText(inbound.message) }.show()
+                            vibrate(200)
+                        }
                     }
                 }
+                "confirm" -> {
+                    ws.send(OutboundPacket.instructions("confirm", battery = battery, scores = scores))
+                }
                 "toast" -> {
-                    infoToast.apply { setText(inbound.message) }.show()
-                    if (inbound.vibrate != null && inbound.vibrate) {
-                        repeat(3) {
-                            vibrate(150)
-                            Thread.sleep(200)
+                    mainThread.post {
+                        infoToast.apply { setText(inbound.message) }.show()
+                        if (inbound.vibrate != null && inbound.vibrate) {
+                            repeat(3) {
+                                vibrate(150)
+                                Thread.sleep(200)
+                            }
                         }
                     }
                 }
@@ -156,21 +184,29 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
                 }
                 "kill" -> if (inbound.off != null && inbound.off) {
                     ws.close(NORMAL_CLOSURE_STATUS, "")
-                    context.finish()
+                    mainThread.post {
+                        context.finish()
+                    }
                 }
                 "failure" -> {
                     reconnect(NORMAL_CLOSURE_STATUS, inbound.message ?: "")
-                    context.statusBar.text = context.getString(R.string.disconnected)
-                    warningToast.apply { setText(inbound.message) }.show()
-                    vibrate()
+                    mainThread.post {
+                        context.statusBar.text = context.getString(R.string.disconnected)
+                        warningToast.apply { setText(inbound.message) }.show()
+                        vibrate()
+                    }
+                    Log.i(TAG, "failed to connect: " + inbound.message)
                 }
                 "closing" -> {
                     ws.send(OutboundPacket.instructions("Goodbye!"))
                     ws.close(NORMAL_CLOSURE_STATUS, inbound.message)
+                    Log.i(TAG, "closing connection: " + inbound.message)
                 }
             }
         } catch (ex: Exception) {
-            warningToast.apply { setText(ex.message) }.show()
+            mainThread.post {
+                warningToast.apply { setText(ex.message) }.show()
+            }
             ex.printStackTrace()
         }
     }
@@ -205,15 +241,15 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
             }
         }
 
-    private fun reconnect(code: Int, reason: String, wait: Int = 0) {
-        if (wait > 0) Thread.sleep(wait * 1000L)
+    private fun reconnect(code: Int, reason: String, wait: Int = 2) {
+        Thread.sleep(wait * 1000L)
         ws.close(code, reason)
         ws = connect()
     }
 
-    private fun connect(): WebSocket = Request.Builder().url("ws://192.168.0.11:8088/TKD").build().let {
+    private fun connect(): WebSocket = Request.Builder().url("ws://192.168.100.117:8088/TKD").build().let {
         client.newWebSocket(it, TKDClient)
-    }
+    }.also { Log.i(TAG, "WebSocket client connected") }
 
 
     private fun setScores(d: Int, side: Mode, mode: Mode) = run {
@@ -224,18 +260,19 @@ object MessageHandler : Handler(Looper.getMainLooper()) {
     }
 
     private fun sendScores() = scores.let {
-        OutboundPacket.instructions("score", battery = battery, scores = Scores(it.lScore, it.rScore))
+        OutboundPacket.instructions("score", battery = battery, scores = scores)
     }.also {
         ws.send(it)
     }
 
-    private fun flipButtonsEnabled(flip: Boolean) {
-        context.decRBg.isEnabled = flip
-        context.decRSm.isEnabled = flip
-        context.decLBg.isEnabled = flip
-        context.decLSm.isEnabled = flip
-        context.undoL.isEnabled = flip
-        context.undoR.isEnabled = flip
-        context.lock.isEnabled = flip
+    private fun flipButtonsEnabled(flip: Boolean) = with (context) {
+        decRBg.isEnabled = flip
+        decRSm.isEnabled = flip
+        decLBg.isEnabled = flip
+        decLSm.isEnabled = flip
+        undoL.isEnabled = flip
+        undoR.isEnabled = flip
+        lock.isEnabled = flip
     }
+
 }
