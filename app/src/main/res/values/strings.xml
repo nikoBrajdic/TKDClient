@@ -11,4 +11,5 @@
     <string name="allScores">all judges\' scores</string>
     <string name="disconnected">disconnected</string>
     <string name="received">Referee #</string>
+    <string name="configFileName" translatable="false">ipconfig.json</string>
 </resources>

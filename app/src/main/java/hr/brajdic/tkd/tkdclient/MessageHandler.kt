@@ -3,10 +3,12 @@ package hr.brajdic.tkd.tkdclient
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Resources
 import android.graphics.Color.*
 import android.os.*
 import android.os.BatteryManager.EXTRA_SCALE
 import android.os.BatteryManager.EXTRA_LEVEL
+import android.provider.Settings.Global.getString
 import android.text.Html
 import android.util.Log
 import android.view.View.INVISIBLE
@@ -23,14 +25,13 @@ import kotlinx.android.synthetic.main.activity_main.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
+import java.io.File
 import java.net.NetworkInterface
 import java.util.*
 import java.util.concurrent.TimeUnit
 
 object MessageHandler : Handler() {
 
-    //private val parser = Klaxon().also { Log.i("MessageHandler", "initialising klaxon") }
-    //private val parser = GsonBuilder().excludeFieldsWithoutExposeAnnotation().create()
     private val parser = ObjectMapper().registerModule(KotlinModule())
     private var id = 0.also { Log.i("MessageHandler", "initialising id") }
     private val warningToast: Toast = makeToast(RED, WHITE, Toast.LENGTH_SHORT).also { Log.i("MessageHandler", "initialising warningtoast") }
@@ -71,7 +72,6 @@ object MessageHandler : Handler() {
         Log.i(TAG, "entering handleMessage")
         try {
             Log.i(TAG, "parsing inbound packet")
-            //val inbound = parser.parse<InboundPacket>(msg.obj as String) ?: return
             val inbound = parser.readValue<InboundPacket>(msg.obj as String)
             Log.i(TAG, "inbound packet parsed: ${msg.obj}")
             when (inbound.type) {
@@ -180,10 +180,10 @@ object MessageHandler : Handler() {
                     }
                 }
                 "disconnect" -> {
-                    reconnect(NORMAL_CLOSURE_STATUS, "referee released", 30)
+                    ws.close(NORMAL_CLOSURE_STATUS, "referee $id released")
                 }
                 "kill" -> if (inbound.off != null && inbound.off) {
-                    ws.close(NORMAL_CLOSURE_STATUS, "")
+                    ws.close(NORMAL_CLOSURE_STATUS, "referee killed by server")
                     mainThread.post {
                         context.finish()
                     }
@@ -247,7 +247,14 @@ object MessageHandler : Handler() {
         ws = connect()
     }
 
-    private fun connect(): WebSocket = Request.Builder().url("ws://192.168.100.117:8088/TKD").build().let {
+    private fun ipFromFile(): String {
+        val fileName = context.getString(R.string.configFileName)
+        val file = File(Environment.getExternalStorageDirectory(), fileName)
+        val ip = parser.readValue<Settings>(file.readText()).ip
+        return "ws://$ip:8088/TKD"
+    }
+
+    private fun connect(): WebSocket = Request.Builder().url(ipFromFile()).build().let {
         client.newWebSocket(it, TKDClient)
     }.also { Log.i(TAG, "WebSocket client connected") }
 
